@@ -34,7 +34,7 @@ public class HazelCastDistributedRunnerMain {
 			// lets initialize the first hcast instance on first 5701 port
 			config = new FileSystemXmlConfig("src/main/resources/hazelcast-second.xml");
 
-			hcast = Hazelcast.newHazelcastInstance(config);
+			HazelcastInstance hcast2 = Hazelcast.newHazelcastInstance(config);
 
 			// This will act as a JOB tracker and Lets chunk the data here But
 			// Job tracker can be run anywhere
@@ -63,12 +63,12 @@ public class HazelCastDistributedRunnerMain {
 
 			List<Future<Integer>> sumOfaChunk = new ArrayList<Future<Integer>>();
 			int finalSum = 0;
-
+			IExecutorService executorService = null;
 			for (Integer j = 0; j < chunks;) {
 
 				MySQLChunkRunner mySqlRunner = new MySQLChunkRunner(i, (j + 1) * 100, "Chunk " + i);
 
-				IExecutorService executorService = hcast.getExecutorService("executormysql");
+				executorService = hcast.getExecutorService("executormysql");
 
 				Future<Integer> future = executorService.submit(mySqlRunner);
 				sumOfaChunk.add(future);
@@ -81,7 +81,10 @@ public class HazelCastDistributedRunnerMain {
 			for (Future<Integer> futureObj : sumOfaChunk) {
 				finalSum += futureObj.get();
 			}
-
+			
+			executorService.destroy();
+			hcast.shutdown();
+			hcast2.shutdown();
 			System.out.println("Final Sum got " + finalSum);
 
 		} catch (FileNotFoundException fe) {
@@ -128,15 +131,16 @@ class MySQLChunkRunner implements HazelcastInstanceAware, Serializable, Callable
 
 			// Lets get the total size of the data.
 			Statement statement = conn.createStatement();
-			
-			//System.out.println("query => "+"select item_type,item_price from item_info limit " + start + "," + end);
-			ResultSet rs = statement
-					.executeQuery("select item_type,item_price from item_info order by item_type desc LIMIT 100 OFFSET "+start);
+
+			// System.out.println("query => "+"select item_type,item_price from
+			// item_info limit " + start + "," + end);
+			ResultSet rs = statement.executeQuery(
+					"select item_type,item_price from item_info order by item_type desc LIMIT 100 OFFSET " + start);
 			int sum = 0;
-			
+
 			while (rs.next()) {
 				int data = rs.getInt(2);
-				
+
 				sum += data;
 			}
 
